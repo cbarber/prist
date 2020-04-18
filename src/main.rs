@@ -1,5 +1,6 @@
 extern crate clap;
 use clap::{App, Arg};
+use git2::Repository;
 
 fn main() {
     let matches = App::new("prist")
@@ -14,9 +15,21 @@ fn main() {
         .get_matches();
 
     let current_dir = std::env::current_dir().unwrap();
-    let current_dir = current_dir.to_str().unwrap();
+    let current_dir_str = current_dir.to_str().unwrap();
 
-    let path = matches.value_of("path").unwrap_or(current_dir);
+    let path = matches.value_of("path").unwrap_or(current_dir_str);
 
-    println!("{}", path);
+    match get_origin_url(path) {
+        Ok(url) => {
+            println!("{}", url);
+        }
+        Err(error) => println!("Failed to find remotes from path: {}", error),
+    }
+}
+
+fn get_origin_url(path: &str) -> Result<String, git2::Error> {
+    let repo = Repository::open(path)?;
+    let origin = repo.find_remote("origin")?;
+    let url = origin.url().unwrap();
+    Ok(url.to_owned())
 }
