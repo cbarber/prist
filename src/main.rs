@@ -1,6 +1,28 @@
 extern crate clap;
 use clap::{App, Arg};
 use git2::Repository;
+use git_url_parse::GitUrl;
+
+mod bitbucket;
+mod github;
+
+pub trait Endpoint: std::fmt::Debug {}
+
+pub fn create_endpoint(url: GitUrl) -> Option<Box<dyn Endpoint + 'static>> {
+    if let Some(host) = url.host.clone() {
+        match host.as_str() {
+            "github.com" => Some(Box::new(github::GithubEndpoint::new(url))),
+            "bitbucket.org" => Some(Box::new(bitbucket::BitbucketEndpoint::new(url))),
+            host => {
+                println!("unsupported host: {}", host);
+                None
+            }
+        }
+    } else {
+        println!("no host defined for url: {}", url);
+        None
+    }
+}
 
 fn main() {
     let matches = App::new("prist")
@@ -22,6 +44,10 @@ fn main() {
     match get_origin_url(path) {
         Ok(url) => {
             println!("{}", url);
+            let url = GitUrl::parse(url.as_str()).unwrap();
+
+            let endpoint = create_endpoint(url);
+            println!("{:?}", endpoint);
         }
         Err(error) => println!("Failed to find remotes from path: {}", error),
     }
