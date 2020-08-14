@@ -1,30 +1,19 @@
 extern crate clap;
-use clap::{App, Arg};
-use git2::Repository;
-use git_url_parse::GitUrl;
+extern crate serde;
 
 mod bitbucket;
 mod github;
+mod settings;
 
-pub trait Endpoint: std::fmt::Debug {}
+use anyhow::{Context, Result};
+use clap::{App, Arg, SubCommand};
+use git2::Repository;
+use git_url_parse::GitUrl;
+use settings::{Auth, Endpoint, Settings};
+use std::io::prelude::*;
+use std::io::{stdin, stdout};
 
-pub fn create_endpoint(url: GitUrl) -> Option<Box<dyn Endpoint + 'static>> {
-    if let Some(host) = url.host.clone() {
-        match host.as_str() {
-            "github.com" => Some(Box::new(github::GithubEndpoint::new(url))),
-            "bitbucket.org" => Some(Box::new(bitbucket::BitbucketEndpoint::new(url))),
-            host => {
-                println!("unsupported host: {}", host);
-                None
-            }
-        }
-    } else {
-        println!("no host defined for url: {}", url);
-        None
-    }
-}
-
-fn main() {
+fn main() -> Result<()> {
     let matches = App::new("prist")
         .version("0.1.0")
         .author("Craig Barber <craigb@mojotech.com>")
@@ -34,23 +23,52 @@ fn main() {
                 .index(1)
                 .help("Sets path for the git repository"),
         )
+        .subcommand(SubCommand::with_name("init").help("Initializes configuration for a path"))
         .get_matches();
 
-    let current_dir = std::env::current_dir().unwrap();
+    let current_dir = std::env::current_dir()?;
     let current_dir_str = current_dir.to_str().unwrap();
 
-    let path = matches.value_of("path").unwrap_or(current_dir_str);
+    let repos_path = matches.value_of("path").unwrap_or(current_dir_str);
 
-    match get_origin_url(path) {
-        Ok(url) => {
-            println!("{}", url);
-            let url = GitUrl::parse(url.as_str()).unwrap();
+    let url = get_origin_url(repos_path)
+        .with_context(|| format!("Failed to find remotes from path: {}", repos_path))?;
 
-            let endpoint = create_endpoint(url);
-            println!("{:?}", endpoint);
+    let url = GitUrl::parse(url.as_str())
+        .with_context(|| format!("failed to parse git origin remote: {}", url))?;
+
+    let endpoint = Endpoint::new(url).unwrap();
+    println!("{:?}", endpoint);
+
+    let settings = match matches.subcommand() {
+        ("init", Some(_)) => {
+            let mut username = String::new();
+            print!("username: ");
+            stdout().flush()?;
+            stdin().read_line(&mut username)?;
+            username = (&username[..username.len() - 1]).to_string();
+
+            let mut password = String::new();
+            print!("password: ");
+            stdout().flush()?;
+            stdin().read_line(&mut password)?;
+            password = (&password[..password.len() - 1]).to_string();
+
+            let settings = Settings::new(Auth::new(username, password), endpoint);
+            settings.save(repos_path)?;
+            settings
         }
-        Err(error) => println!("Failed to find remotes from path: {}", error),
-    }
+        _ => settings::Settings::load(repos_path).with_context(|| {
+            format!(
+                "Failed to open settings in: {}. Did you forget to init?",
+                repos_path
+            )
+        })?,
+    };
+
+    println!("{:?}", settings);
+
+    Ok(())
 }
 
 fn get_origin_url(path: &str) -> Result<String, git2::Error> {
