@@ -90,71 +90,74 @@ fn main() -> Result<()> {
 
     let mut client = bitbucket::client(settings);
     match opts.command {
-        OptCommand::PR { id: Some(id) } => {
-            let query = vec![("pagelen", "50")];
-            let pullrequest_activities: bitbucket::Paginated<bitbucket::PullRequestActivity> =
-                client.get_with(id, &query).unwrap();
-
-            let mut table = Table::new();
-            table.add_row(row!["Type", "User", "Date", "Content"]);
-            for pullrequest_activity in pullrequest_activities.values {
-                match pullrequest_activity {
-                    PullRequestActivity::Comment {
-                        comment:
-                            Comment {
-                                user,
-                                created_on,
-                                content,
-                            },
-                    } => table.add_row(row!["Comment", user.display_name, created_on, content.raw]),
-
-                    PullRequestActivity::Approval {
-                        approval: Approval { user, date },
-                    } => table.add_row(row!["Approval", user.display_name, date, ""]),
-                    PullRequestActivity::Update {
-                        update:
-                            Update {
-                                author,
-                                date,
-                                source,
-                                destination,
-                            },
-                    } => table.add_row(row![
-                        "Update",
-                        author.display_name,
-                        date,
-                        format!("{}..{}", destination.commit.hash, source.commit.hash)
-                    ]),
-                };
-            }
-            table.printstd();
-        }
-        OptCommand::PR { .. } => {
-            let pullrequests: bitbucket::Paginated<bitbucket::PullRequest> =
-                client.get(()).unwrap();
-            let mut table = Table::new();
-            table.add_row(row![
-                "Id", "Title", "Author", "State", "Comments", "Created", "Updated"
-            ]);
-            for pullrequest in pullrequests.values {
-                table.add_row(row![
-                    pullrequest.id,
-                    pullrequest.title,
-                    pullrequest.author.display_name,
-                    pullrequest.state,
-                    pullrequest.comment_count,
-                    pullrequest.created_on,
-                    pullrequest.updated_on
-                ]);
-            }
-            table.printstd();
-        }
+        OptCommand::PR { id: Some(id) } => show_pr(&mut client, id),
+        OptCommand::PR { .. } => list_pr(&mut client),
         _ => {
             println!("Done");
         }
     };
 
     Ok(())
+}
+
+fn show_pr(client: &mut restson::RestClient, id: u32) {
+    let query = vec![("pagelen", "50")];
+    let pullrequest_activities: bitbucket::Paginated<bitbucket::PullRequestActivity> =
+        client.get_with(id, &query).unwrap();
+
+    let mut table = Table::new();
+    table.add_row(row!["Type", "User", "Date", "Content"]);
+    for pullrequest_activity in pullrequest_activities.values {
+        match pullrequest_activity {
+            PullRequestActivity::Comment {
+                comment:
+                    Comment {
+                        user,
+                        created_on,
+                        content,
+                    },
+            } => table.add_row(row!["Comment", user.display_name, created_on, content.raw]),
+
+            PullRequestActivity::Approval {
+                approval: Approval { user, date },
+            } => table.add_row(row!["Approval", user.display_name, date, ""]),
+            PullRequestActivity::Update {
+                update:
+                    Update {
+                        author,
+                        date,
+                        source,
+                        destination,
+                    },
+            } => table.add_row(row![
+                "Update",
+                author.display_name,
+                date,
+                format!("{}..{}", destination.commit.hash, source.commit.hash)
+            ]),
+        };
+    }
+    table.printstd();
+}
+
+fn list_pr(client: &mut restson::RestClient) {
+    let pullrequests: bitbucket::Paginated<bitbucket::PullRequest> = client.get(()).unwrap();
+    let mut table = Table::new();
+    table.add_row(row![
+        "Id", "Title", "Author", "State", "Comments", "Created", "Updated"
+    ]);
+    for pullrequest in pullrequests.values {
+        table.add_row(row![
+            pullrequest.id,
+            pullrequest.title,
+            pullrequest.author.display_name,
+            pullrequest.state,
+            pullrequest.comment_count,
+            pullrequest.created_on,
+            pullrequest.updated_on
+        ]);
+    }
+    table.printstd();
 }
 
 fn get_origin_url(path: &str) -> Result<String, git2::Error> {
