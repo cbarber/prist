@@ -1,5 +1,6 @@
 use crate::settings::Settings;
 
+use log::debug;
 use restson::{Error, RestClient, RestPath};
 use serde::{Deserialize, Serialize};
 
@@ -88,7 +89,7 @@ pub fn client(settings: Settings) -> RestClient {
         workspace = settings.endpoint.owner.unwrap(),
         repo_slug = settings.endpoint.name
     );
-    println!("Connecting to endpoint: {}", url);
+    debug!("Connecting to endpoint: {}", url);
     let mut client = RestClient::new(&url[..]).unwrap();
     client.set_auth(&settings.auth.username[..], &settings.auth.password[..]);
     client

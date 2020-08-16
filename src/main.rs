@@ -15,6 +15,7 @@ use anyhow::{Context, Result};
 use clap::Clap;
 use git2::Repository;
 use git_url_parse::GitUrl;
+use log::debug;
 use prettytable::Table;
 use std::io::prelude::*;
 use std::io::{stdin, stdout};
@@ -58,7 +59,7 @@ fn main() -> Result<()> {
         .with_context(|| format!("failed to parse git origin remote: {}", url))?;
 
     let endpoint = Endpoint::new(url).unwrap();
-    println!("{:?}", endpoint);
+    debug!("{:?}", endpoint);
 
     let settings = match opts.command {
         OptCommand::Init => {
@@ -85,16 +86,13 @@ fn main() -> Result<()> {
             )
         })?,
     };
-
-    println!("{:?}", settings);
+    debug!("{:?}", settings);
 
     let mut client = bitbucket::client(settings);
     match opts.command {
         OptCommand::PR { id: Some(id) } => show_pr(&mut client, id),
         OptCommand::PR { .. } => list_pr(&mut client),
-        _ => {
-            println!("Done");
-        }
+        _ => {}
     };
 
     Ok(())
