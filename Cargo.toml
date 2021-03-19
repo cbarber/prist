@@ -19,4 +19,5 @@ prettytable-rs = "^0.8"
 restson = { git = "https://github.com/spietika/restson-rust.git" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+textwrap = { version = "0.12.1", features = ["terminal_size"] }
 toml = "0.5"

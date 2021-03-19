@@ -40,6 +40,14 @@ pub struct Comment {
     pub user: User,
     pub created_on: String,
     pub content: CommentContent,
+    pub inline: Option<Inline>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct Inline {
+    from: Option<u32>,
+    to: Option<u32>,
+    path: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -63,12 +71,25 @@ pub struct Update {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Source {
-    pub commit: Commit,
+    pub commit: PullRequestCommit,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PullRequestCommit {
+    pub hash: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Commit {
     pub hash: String,
+    pub parents: Vec<CommitParent>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum CommitParent {
+    #[serde(rename = "commit")]
+    Commit { hash: String },
 }
 
 impl RestPath<()> for Paginated<PullRequest> {
@@ -83,6 +104,30 @@ impl RestPath<u32> for Paginated<PullRequestActivity> {
     }
 }
 
+impl RestPath<u32> for Paginated<PullRequestCommit> {
+    fn get_path(pull_request_id: u32) -> Result<String, Error> {
+        Ok(format!("pullrequests/{}/commits", pull_request_id))
+    }
+}
+
+impl RestPath<String> for Commit {
+    fn get_path(sha: String) -> Result<String, Error> {
+        Ok(format!("commit/{}", sha))
+    }
+}
+
+impl RestPath<(String, String)> for Commit {
+    fn get_path(revspec: (String, String)) -> Result<String, Error> {
+        Ok(format!("merge-base/{}..{}", revspec.0, revspec.1))
+    }
+}
+
+impl RestPath<String> for Paginated<Comment> {
+    fn get_path(sha: String) -> Result<String, Error> {
+        Ok(format!("commit/{}/comments", sha))
+    }
+}
+
 pub fn client(settings: Settings) -> RestClient {
     let url = format!(
         "https://api.bitbucket.org/2.0/repositories/{workspace}/{repo_slug}/",
@@ -94,3 +139,9 @@ pub fn client(settings: Settings) -> RestClient {
     client.set_auth(&settings.auth.username[..], &settings.auth.password[..]);
     client
 }
+
+// PR
+//  - current commits
+//  - activity
+//    - revspc
+//      - old commits
